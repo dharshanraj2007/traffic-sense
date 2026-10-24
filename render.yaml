@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: traffic-sense-api
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@trafficsense.gov
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: STORAGE_BACKEND
+        value: local
+      - key: FRAME_STRIDE
+        value: "3"
+      - key: MAX_VIDEO_MB
+        value: "50"
+      - key: MAX_VIDEO_SECONDS
+        value: "90"
