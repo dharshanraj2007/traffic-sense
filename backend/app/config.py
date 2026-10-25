@@ -53,3 +53,10 @@ if not os.path.isabs(PLATE_MODEL_PATH):
 FRAME_STRIDE = int(os.getenv("FRAME_STRIDE", "3"))
 MAX_VIDEO_MB = int(os.getenv("MAX_VIDEO_MB", "50"))
 MAX_VIDEO_SECONDS = int(os.getenv("MAX_VIDEO_SECONDS", "90"))
+
+# Environment and Hybrid AI Worker Config
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
+WORKER_SECRET_KEY = os.getenv("WORKER_SECRET_KEY", "traffic_sense_worker_secret_2026")
+# Modes: "embedded" (runs AI in backend thread) or "hybrid" (external worker polls/processes jobs)
+AI_WORKER_MODE = os.getenv("AI_WORKER_MODE", "embedded" if ENVIRONMENT == "development" else "hybrid")

@@ -8,6 +8,12 @@ services:
     region: oregon
     healthCheckPath: /api/health
     envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: AI_WORKER_MODE
+        value: hybrid
+      - key: WORKER_SECRET_KEY
+        generateValue: true
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET

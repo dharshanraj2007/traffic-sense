@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.env
+
+# SQLite & local database
+*.db
+*.sqlite3
+
+# Uploads and temporary evidence
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/uploads/evidence/*
+!backend/uploads/evidence/.gitkeep
+
+# Node & Frontend
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env
+*.local
+
+# Logs
+logs/
+*.log
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

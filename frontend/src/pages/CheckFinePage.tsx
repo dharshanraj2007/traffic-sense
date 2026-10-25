@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Navbar } from '../components/Navbar';
-import { api } from '../api/client';
+import { api, getAssetUrl } from '../api/client';
 import { PublicFineResult, Violation } from '../types';
 import {
   Search, ShieldCheck, AlertCircle, CheckCircle2,
@@ -185,7 +185,7 @@ export const CheckFinePage: React.FC = () => {
                           {/* Evidence Thumbnail */}
                           {v.evidence_url ? (
                             <img
-                              src={v.evidence_url}
+                              src={getAssetUrl(v.evidence_url)}
                               alt="Evidence"
                               className="w-24 h-16 rounded-xl object-cover border border-gray-700 bg-gray-950 shrink-0"
                             />

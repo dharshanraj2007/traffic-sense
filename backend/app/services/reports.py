@@ -111,9 +111,9 @@ def generate_pdf_report(violations: List[Violation], summary: Dict[str, Any]) ->
             Paragraph(f"<b>Cancelled:</b> {summary.get('cancelled_count', 0)}", cell_style),
         ],
         [
-            Paragraph(f"<b>Total Amount:</b> ₹{summary.get('total_amount', 0):,.2f}", cell_style),
-            Paragraph(f"<b>Pending Amount:</b> ₹{summary.get('pending_amount', 0):,.2f}", cell_style),
-            Paragraph(f"<b>Collected Amount:</b> ₹{summary.get('collected_amount', 0):,.2f}", cell_style),
+            Paragraph(f"<b>Total Amount:</b> Rs. {summary.get('total_amount', 0):,.2f}", cell_style),
+            Paragraph(f"<b>Pending Amount:</b> Rs. {summary.get('pending_amount', 0):,.2f}", cell_style),
+            Paragraph(f"<b>Collected Amount:</b> Rs. {summary.get('collected_amount', 0):,.2f}", cell_style),
             Paragraph(f"<b>Needs Review:</b> {summary.get('needs_review_count', 0)}", cell_style),
         ]
     ]
@@ -134,7 +134,7 @@ def generate_pdf_report(violations: List[Violation], summary: Dict[str, Any]) ->
         Paragraph("Violation Type", header_cell_style),
         Paragraph("Location", header_cell_style),
         Paragraph("Date & Time", header_cell_style),
-        Paragraph("Amount (₹)", header_cell_style),
+        Paragraph("Amount (Rs.)", header_cell_style),
         Paragraph("Status", header_cell_style),
         Paragraph("Source", header_cell_style),
     ]
@@ -148,7 +148,7 @@ def generate_pdf_report(violations: List[Violation], summary: Dict[str, Any]) ->
             Paragraph(v.violation_type, cell_style),
             Paragraph(v.location[:25] + ('...' if len(v.location) > 25 else ''), cell_style),
             Paragraph(v.occurred_at.strftime("%Y-%m-%d %H:%M") if v.occurred_at else "", cell_style),
-            Paragraph(f"₹{v.fine_amount:.2f}", cell_style),
+            Paragraph(f"Rs. {v.fine_amount:.2f}", cell_style),
             Paragraph(f"<font color='{status_color}'><b>{v.status}</b></font>", cell_style),
             Paragraph(v.source, cell_style),
         ])

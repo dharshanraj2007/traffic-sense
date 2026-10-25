@@ -7,8 +7,7 @@ from app.database import get_db, SessionLocal
 from app.models import VideoJob, Admin, Violation
 from app.schemas import VideoJobOut, VideoAnalyzeResponse
 from app.auth import get_current_admin
-from app.config import UPLOAD_DIR, MAX_VIDEO_MB
-from app.services.detector import start_video_processing_thread, is_processing_active
+from app.config import UPLOAD_DIR, MAX_VIDEO_MB, AI_WORKER_MODE
 
 router = APIRouter(prefix="", tags=["videos"])
 
@@ -20,22 +19,14 @@ def analyze_video(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):
-    global is_processing_active
-
-    # Check file extension
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported video format '{ext}'. Allowed formats: MP4, AVI, MOV."
-        )
-
-    # Check single-job queue
-    if is_processing_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="The AI processing engine is currently busy analyzing another video. Please wait until it completes."
-        )
+    # Check single-job queue if running embedded
+    if AI_WORKER_MODE == "embedded":
+        from app.services.detector import is_processing_active
+        if is_processing_active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="The AI processing engine is currently busy analyzing another video. Please wait until it completes."
+            )
 
     # Save to temp file and validate size
     unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
@@ -74,12 +65,17 @@ def analyze_video(
     db.commit()
     db.refresh(job)
 
-    # Spawn background processing
-    start_video_processing_thread(job.id, str(temp_path), SessionLocal)
+    # Spawn background processing if embedded mode
+    if AI_WORKER_MODE == "embedded":
+        from app.services.detector import start_video_processing_thread
+        start_video_processing_thread(job.id, str(temp_path), SessionLocal)
+        msg = "Video uploaded successfully. AI processing started."
+    else:
+        msg = "Video uploaded successfully. AI analysis queued for worker."
 
     return VideoAnalyzeResponse(
         job_id=job.id,
-        message="Video uploaded successfully. AI processing started.",
+        message=msg,
         filename=file.filename
     )
 

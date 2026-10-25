@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { api, getAssetUrl } from '../api/client';
 import { Violation, ViolationListResponse } from '../types';
 import {
   Search, Filter, CheckCircle2, XCircle, Eye,
@@ -238,7 +238,7 @@ export const FinesPage: React.FC = () => {
                     <td className="p-3.5">
                       {v.evidence_url ? (
                         <img
-                          src={v.evidence_url}
+                          src={getAssetUrl(v.evidence_url)}
                           alt="Thumbnail"
                           onClick={() => setSelectedViolation(v)}
                           className="w-12 h-8 rounded object-cover cursor-pointer hover:opacity-80 transition-opacity border border-gray-700 bg-gray-900"
@@ -412,7 +412,7 @@ export const FinesPage: React.FC = () => {
                 <div>
                   <label className="block text-gray-400 mb-1 font-semibold">Surveillance Frame Snapshot</label>
                   <img
-                    src={selectedViolation.evidence_url}
+                    src={getAssetUrl(selectedViolation.evidence_url)}
                     alt="Evidence Frame"
                     className="w-full rounded-xl border border-gray-800 max-h-72 object-contain bg-black"
                   />
@@ -424,7 +424,7 @@ export const FinesPage: React.FC = () => {
                 <div>
                   <label className="block text-gray-400 mb-1 font-semibold">Extracted License Plate</label>
                   <img
-                    src={selectedViolation.plate_crop_url}
+                    src={getAssetUrl(selectedViolation.plate_crop_url)}
                     alt="Plate Crop"
                     className="h-16 rounded border border-gray-700 bg-white object-contain"
                   />

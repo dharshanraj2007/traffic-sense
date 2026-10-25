@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { api, getAssetUrl } from '../api/client';
 import { DashboardStats, Violation } from '../types';
 import {
   AlertTriangle, CheckCircle2, Clock, IndianRupee,
@@ -312,7 +312,7 @@ export const DashboardPage: React.FC = () => {
                 {selectedViolation.evidence_url ? (
                   <div className="rounded-xl overflow-hidden border border-gray-800 bg-gray-950">
                     <img
-                      src={selectedViolation.evidence_url}
+                      src={getAssetUrl(selectedViolation.evidence_url)}
                       alt="Violation Evidence Frame"
                       className="w-full max-h-72 object-contain"
                     />
@@ -329,7 +329,7 @@ export const DashboardPage: React.FC = () => {
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 mb-2">Extracted Plate Crop</label>
                   <img
-                    src={selectedViolation.plate_crop_url}
+                    src={getAssetUrl(selectedViolation.plate_crop_url)}
                     alt="License Plate Crop"
                     className="h-16 rounded-lg border border-gray-700 object-contain bg-white"
                   />

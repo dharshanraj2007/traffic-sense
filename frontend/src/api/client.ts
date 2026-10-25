@@ -7,6 +7,17 @@ export const api = axios.create({
   timeout: 45000,
 });
 
+export function getAssetUrl(path?: string | null): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  const base = import.meta.env.VITE_API_URL || '';
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${cleanBase}${cleanPath}`;
+}
+
 // Request interceptor to attach JWT token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('traffic_sense_token');

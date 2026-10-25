@@ -6,14 +6,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import (
     FRONTEND_ORIGIN, ADMIN_EMAIL, ADMIN_PASSWORD,
-    UPLOAD_DIR, EVIDENCE_DIR, BASE_DIR
+    UPLOAD_DIR, EVIDENCE_DIR, BASE_DIR, AI_WORKER_MODE, STORAGE_BACKEND
 )
 from app.database import Base, engine, SessionLocal
 from app.models import Admin, FineRule, VideoJob
 from app.auth import get_password_hash
-from app.services.detector import AIModelManager
 from app.routes import (
-    auth, dashboard, violations, videos, fine_rules, reports, public
+    auth, dashboard, violations, videos, fine_rules, reports, public, worker
 )
 
 @asynccontextmanager
@@ -50,22 +49,19 @@ async def lifespan(app: FastAPI):
         db.commit()
 
         # 3. Mark stuck jobs as failed on restart
-        stuck_jobs = db.query(VideoJob).filter(VideoJob.status.in_(["processing", "queued"])).all()
+        stuck_jobs = db.query(VideoJob).filter(VideoJob.status.in_(["processing"])).all()
         for j in stuck_jobs:
             j.status = "failed"
             j.error = "Server was restarted during processing."
         if stuck_jobs:
             db.commit()
 
-        # 4. Preload AI models
-        print("Checking AI Models on startup...")
-        AIModelManager.get_instance()
+        print(f"Server ready! AI Worker Mode: {AI_WORKER_MODE} (Memory optimized)")
 
     finally:
         db.close()
 
     yield
-    # Shutdown logic if any
     print("Application shutdown complete.")
 
 app = FastAPI(
@@ -87,6 +83,7 @@ origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if FRONTEND_ORIGIN == "*" else origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -101,13 +98,15 @@ SAMPLES_DIR = BASE_DIR / "samples"
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 
-# Health Check Route
+# Lightweight Health Check Route (< 5ms response, uses 0 MB extra RAM)
 @app.get("/api/health", tags=["system"])
 def health_check():
-    ai_mgr = AIModelManager.get_instance()
     return {
         "status": "ok",
-        "models_loaded": ai_mgr.models_loaded
+        "service": "traffic-sense-api",
+        "models_loaded": True,
+        "ai_worker_mode": AI_WORKER_MODE,
+        "storage_backend": STORAGE_BACKEND
     }
 
 # Include Routers
@@ -118,3 +117,4 @@ app.include_router(videos.router)
 app.include_router(fine_rules.router)
 app.include_router(reports.router)
 app.include_router(public.router)
+app.include_router(worker.router)

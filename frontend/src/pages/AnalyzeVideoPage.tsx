@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../api/client';
+import { api, getAssetUrl } from '../api/client';
 import { VideoJob, Violation } from '../types';
 import {
   UploadCloud, Video, AlertCircle, CheckCircle2,
@@ -18,6 +18,8 @@ export const AnalyzeVideoPage: React.FC = () => {
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
   const [loadingSample, setLoadingSample] = useState<string | null>(null);
 
+  const [workerInfo, setWorkerInfo] = useState<{ mode?: string; worker_online?: boolean; message?: string } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchRecentJobs = async () => {
@@ -29,8 +31,20 @@ export const AnalyzeVideoPage: React.FC = () => {
     }
   };
 
+  const fetchWorkerStatus = async () => {
+    try {
+      const res = await api.get('/api/worker/status');
+      setWorkerInfo(res.data);
+    } catch {
+      // optional
+    }
+  };
+
   useEffect(() => {
     fetchRecentJobs();
+    fetchWorkerStatus();
+    const wInterval = setInterval(fetchWorkerStatus, 10000);
+    return () => clearInterval(wInterval);
   }, []);
 
   // Polling active job
@@ -88,7 +102,7 @@ export const AnalyzeVideoPage: React.FC = () => {
     setLoadingSample(filename);
     setErrorMsg(null);
     try {
-      const response = await fetch(`/samples/${filename}`);
+      const response = await fetch(getAssetUrl(`/samples/${filename}`));
       if (!response.ok) throw new Error("Could not fetch sample video");
       const blob = await response.blob();
       const sampleFile = new File([blob], filename, { type: 'video/mp4' });
@@ -140,11 +154,23 @@ export const AnalyzeVideoPage: React.FC = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold font-['Outfit'] text-white">AI Traffic Video Ingestion & Analysis</h1>
-        <p className="text-xs text-gray-400 mt-0.5">
-          Upload road camera footage to automatically detect vehicles, classify helmet non-compliance, and extract license plates
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold font-['Outfit'] text-white">AI Traffic Video Ingestion & Analysis</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Upload road camera footage to automatically detect vehicles, speed, signal jumping, helmet violations, wrong-way driving, and extract license plates
+          </p>
+        </div>
+        {workerInfo && (
+          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border shrink-0 ${
+            workerInfo.worker_online
+              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/40'
+              : 'bg-amber-950/60 text-amber-300 border-amber-800/40'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${workerInfo.worker_online ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{workerInfo.message}</span>
+          </div>
+        )}
       </div>
 
       {/* Preloaded Sample Videos Picker Banner */}
@@ -464,7 +490,7 @@ export const AnalyzeVideoPage: React.FC = () => {
             <div className="mt-4 space-y-4 text-xs">
               {selectedViolation.evidence_url && (
                 <img
-                  src={selectedViolation.evidence_url}
+                  src={getAssetUrl(selectedViolation.evidence_url)}
                   alt="Evidence"
                   className="w-full rounded-xl border border-gray-800 max-h-72 object-contain bg-black"
                 />
@@ -472,7 +498,7 @@ export const AnalyzeVideoPage: React.FC = () => {
               {selectedViolation.plate_crop_url && (
                 <div>
                   <p className="text-gray-400 mb-1">Plate Crop:</p>
-                  <img src={selectedViolation.plate_crop_url} alt="Plate" className="h-16 rounded border border-gray-700 bg-white" />
+                  <img src={getAssetUrl(selectedViolation.plate_crop_url)} alt="Plate" className="h-16 rounded border border-gray-700 bg-white" />
                 </div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">

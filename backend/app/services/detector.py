@@ -52,12 +52,10 @@ class AIModelManager:
     _lock = threading.Lock()
 
     def __init__(self):
-        self.vehicle_model = None
-        self.helmet_model = None
-        self.plate_model = None
-        self.ocr_reader = None
-        self.models_loaded = False
-        self.load_models()
+        self._vehicle_model = None
+        self._helmet_model = None
+        self._plate_model = None
+        self._ocr_reader = None
 
     @classmethod
     def get_instance(cls):
@@ -66,36 +64,80 @@ class AIModelManager:
                 cls._instance = cls()
             return cls._instance
 
-    def load_models(self):
-        try:
-            from ultralytics import YOLO
-            import easyocr
+    @property
+    def vehicle_model(self):
+        if self._vehicle_model is None:
+            with self._lock:
+                if self._vehicle_model is None:
+                    try:
+                        import torch
+                        torch.set_num_threads(2)
+                        from ultralytics import YOLO
+                        print("Lazy loading YOLOv8 vehicle tracking model...")
+                        self._vehicle_model = YOLO("yolov8n.pt")
+                    except Exception as e:
+                        print(f"Error loading vehicle model: {e}")
+        return self._vehicle_model
 
-            print("Loading YOLOv8 vehicle tracking model...")
-            self.vehicle_model = YOLO("yolov8n.pt")
+    @property
+    def helmet_model(self):
+        if self._helmet_model is None:
+            with self._lock:
+                if self._helmet_model is None:
+                    try:
+                        if os.path.exists(HELMET_MODEL_PATH):
+                            from ultralytics import YOLO
+                            print(f"Lazy loading Helmet model from {HELMET_MODEL_PATH}...")
+                            self._helmet_model = YOLO(HELMET_MODEL_PATH)
+                    except Exception as e:
+                        print(f"Error loading helmet model: {e}")
+        return self._helmet_model
 
-            if os.path.exists(HELMET_MODEL_PATH):
-                print(f"Loading Helmet model from {HELMET_MODEL_PATH}...")
-                self.helmet_model = YOLO(HELMET_MODEL_PATH)
-            else:
-                print(f"Helmet model not found at {HELMET_MODEL_PATH}, fallback enabled.")
-                self.helmet_model = None
+    @property
+    def plate_model(self):
+        if self._plate_model is None:
+            with self._lock:
+                if self._plate_model is None:
+                    try:
+                        if os.path.exists(PLATE_MODEL_PATH):
+                            from ultralytics import YOLO
+                            print(f"Lazy loading License Plate model from {PLATE_MODEL_PATH}...")
+                            self._plate_model = YOLO(PLATE_MODEL_PATH)
+                    except Exception as e:
+                        print(f"Error loading plate model: {e}")
+        return self._plate_model
 
-            if os.path.exists(PLATE_MODEL_PATH):
-                print(f"Loading License Plate model from {PLATE_MODEL_PATH}...")
-                self.plate_model = YOLO(PLATE_MODEL_PATH)
-            else:
-                print(f"Plate model not found at {PLATE_MODEL_PATH}, fallback enabled.")
-                self.plate_model = None
+    @property
+    def ocr_reader(self):
+        if self._ocr_reader is None:
+            with self._lock:
+                if self._ocr_reader is None:
+                    try:
+                        import easyocr
+                        print("Lazy initializing EasyOCR reader (CPU)...")
+                        self._ocr_reader = easyocr.Reader(['en'], gpu=False)
+                    except Exception as e:
+                        print(f"Error loading EasyOCR: {e}")
+        return self._ocr_reader
 
-            print("Initializing EasyOCR reader (CPU)...")
-            self.ocr_reader = easyocr.Reader(['en'], gpu=False)
+    @property
+    def models_loaded(self) -> bool:
+        return self._vehicle_model is not None
 
-            self.models_loaded = True
-            print("All AI models loaded successfully!")
-        except Exception as e:
-            print(f"Error loading AI models: {e}")
-            self.models_loaded = False
+    def release_models(self):
+        """Releases memory by clearing models and invoking garbage collection."""
+        with self._lock:
+            self._vehicle_model = None
+            self._helmet_model = None
+            self._plate_model = None
+            self._ocr_reader = None
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
 
 
 # Concurrency control: only one video processed at a time
@@ -678,6 +720,57 @@ def process_video_job(job_id: int, video_path: str, db_factory):
                                 ))
                                 db.commit()
 
+                        # -------------------------------------------------------------
+                        # VIOLATION 4: WRONG SIDE DRIVING (COUNTER-FLOW)
+                        # -------------------------------------------------------------
+                        if "Wrong Side Driving" not in v_data['violations'] and len(v_data['history']) >= 4:
+                            p_prev = v_data['history'][-4]
+                            dy = cy - p_prev[3]
+                            dx = cx - p_prev[2]
+                            # Detect counter-flow motion against standard roadway direction
+                            # (Right side corridor cx > w * 0.45 heading northward dy < -35)
+                            if (cx > w * 0.45 and dy < -35 and abs(dy) > abs(dx) * 0.7) or (cx < w * 0.45 and dy > 40 and abs(dy) > abs(dx) * 0.7 and cid == 3):
+                                v_data['violations'].add("Wrong Side Driving")
+                                violations_count += 1
+
+                                evidence_img = draw_smart_city_cctv_hud(
+                                    frame=frame,
+                                    vehicle_box=box,
+                                    violation_type="Wrong Side Driving",
+                                    plate_number=v_data['plate_number'],
+                                    confidence=0.90,
+                                    plate_crop=v_data['plate_crop']
+                                )
+                                _, ev_enc = cv2.imencode(".jpg", evidence_img, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+                                ev_url = storage.save_image(ev_enc.tobytes(), f"ev_wrong_job{job_id}_v{tid}.jpg")
+
+                                pl_url = None
+                                if v_data['plate_crop'] is not None and v_data['plate_crop'].size > 0:
+                                    _, pl_enc = cv2.imencode(".jpg", v_data['plate_crop'], [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                                    pl_url = storage.save_image(pl_enc.tobytes(), f"plate_job{job_id}_v{tid}.jpg")
+
+                                date_str = datetime.datetime.utcnow().strftime("%Y%m%d")
+                                fine_ref = f"FN-{date_str}-{uuid.uuid4().hex[:4].upper()}"
+                                fine_amt = rules_map.get("Wrong Side Driving", 1500.0)
+
+                                db.add(Violation(
+                                    fine_ref=fine_ref,
+                                    plate_number=v_data['plate_number'],
+                                    violation_type="Wrong Side Driving",
+                                    location="Sector 4 Junction - Pole CCTV #04",
+                                    occurred_at=job.created_at + datetime.timedelta(seconds=t_sec),
+                                    fine_amount=fine_amt,
+                                    status="Pending",
+                                    source="AI",
+                                    confidence=0.90,
+                                    needs_review=False,
+                                    evidence_url=ev_url,
+                                    plate_crop_url=pl_url,
+                                    video_job_id=job.id,
+                                    notes=f"Track #{tid} detected proceeding counter-flow / wrong side of carriageway at frame {frame_idx}."
+                                ))
+                                db.commit()
+
             except Exception as frame_err:
                 print(f"Error processing frame {frame_idx}: {frame_err}")
 
@@ -711,6 +804,7 @@ def process_video_job(job_id: int, video_path: str, db_factory):
         except Exception:
             pass
 
+        ai_mgr.release_models()
         db.close()
         gc.collect()
         is_processing_active = False
