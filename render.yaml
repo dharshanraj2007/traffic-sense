@@ -11,7 +11,7 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: AI_WORKER_MODE
-        value: hybrid
+        value: embedded
       - key: WORKER_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
@@ -23,7 +23,7 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: FRONTEND_ORIGIN
-        sync: false
+        value: https://traffic-sense-frontend.onrender.com
       - key: STORAGE_BACKEND
         value: local
       - key: FRAME_STRIDE

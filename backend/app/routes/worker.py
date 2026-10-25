@@ -18,6 +18,11 @@ router = APIRouter(prefix="/api/worker", tags=["worker"])
 # In-memory tracking of worker heartbeat
 last_worker_heartbeat: Optional[datetime.datetime] = None
 
+def record_heartbeat():
+    """Records a live heartbeat from either the embedded worker or an external worker."""
+    global last_worker_heartbeat
+    last_worker_heartbeat = datetime.datetime.utcnow()
+
 def verify_worker_token(x_worker_token: Optional[str] = Header(None)):
     """Verifies that the request comes from an authorized AI Inference Worker."""
     if not x_worker_token or x_worker_token != WORKER_SECRET_KEY:
@@ -25,8 +30,7 @@ def verify_worker_token(x_worker_token: Optional[str] = Header(None)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing X-Worker-Token header."
         )
-    global last_worker_heartbeat
-    last_worker_heartbeat = datetime.datetime.utcnow()
+    record_heartbeat()
     return True
 
 
@@ -57,12 +61,12 @@ def get_worker_status():
 
     return {
         "mode": AI_WORKER_MODE,
-        "worker_online": is_online or AI_WORKER_MODE == "embedded",
+        "worker_online": is_online,
         "last_heartbeat_seconds_ago": seconds_ago,
         "message": (
-            "Embedded AI engine active"
-            if AI_WORKER_MODE == "embedded"
-            else ("Worker connected" if is_online else "Waiting for worker to connect")
+            ("Embedded AI worker active" if AI_WORKER_MODE == "embedded" else "Worker online & connected")
+            if is_online
+            else "Waiting for worker to connect"
         )
     }
 

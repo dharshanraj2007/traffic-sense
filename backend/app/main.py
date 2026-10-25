@@ -56,12 +56,19 @@ async def lifespan(app: FastAPI):
         if stuck_jobs:
             db.commit()
 
+        # 4. Start Embedded AI Worker
+        from app.services.worker_service import start_embedded_worker, stop_embedded_worker
+        start_embedded_worker()
+
         print(f"Server ready! AI Worker Mode: {AI_WORKER_MODE} (Memory optimized)")
 
     finally:
         db.close()
 
     yield
+    print("Application shutdown initiated...")
+    from app.services.worker_service import stop_embedded_worker
+    stop_embedded_worker()
     print("Application shutdown complete.")
 
 app = FastAPI(
@@ -72,21 +79,43 @@ app = FastAPI(
 )
 
 # CORS configuration
-origins = [
-    FRONTEND_ORIGIN,
+base_origins = [
     "http://localhost:5173",
     "http://localhost:3000",
+    "http://localhost:8080",
+    "http://localhost:4173",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:4173",
+    "https://traffic-sense-frontend.onrender.com",
 ]
+
+allowed_origins_set = set(base_origins)
+if FRONTEND_ORIGIN and FRONTEND_ORIGIN != "*":
+    for origin_item in FRONTEND_ORIGIN.split(","):
+        cleaned = origin_item.strip().strip("'\"").rstrip("/")
+        if cleaned:
+            allowed_origins_set.add(cleaned)
+
+allowed_origins = list(allowed_origins_set)
+
+# Match Render and Vercel domains; allow any origin if wildcard is configured
+origin_regex = (
+    r"https?://.*"
+    if FRONTEND_ORIGIN == "*"
+    else r"https://.*(\.onrender\.com|\.vercel\.app)"
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if FRONTEND_ORIGIN == "*" else origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=allowed_origins,
+    allow_origin_regex=origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition", "Content-Length", "X-Total-Count"],
+    max_age=86400,
 )
 
 # Mount evidence and uploads static files

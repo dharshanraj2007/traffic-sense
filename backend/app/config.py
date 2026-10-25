@@ -21,7 +21,7 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@trafficsense.gov")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Admin@123456")
 
 # CORS
-FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").strip().strip("'\"").rstrip("/")
 
 # Storage backend (local | cloudinary | supabase)
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local")
@@ -58,5 +58,5 @@ MAX_VIDEO_SECONDS = int(os.getenv("MAX_VIDEO_SECONDS", "90"))
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000").rstrip("/")
 WORKER_SECRET_KEY = os.getenv("WORKER_SECRET_KEY", "traffic_sense_worker_secret_2026")
-# Modes: "embedded" (runs AI in backend thread) or "hybrid" (external worker polls/processes jobs)
-AI_WORKER_MODE = os.getenv("AI_WORKER_MODE", "embedded" if ENVIRONMENT == "development" else "hybrid")
+# Modes: "embedded" (runs AI worker in FastAPI lifespan thread) or "hybrid" (external worker)
+AI_WORKER_MODE = os.getenv("AI_WORKER_MODE", "embedded")

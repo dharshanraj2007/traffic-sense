@@ -19,41 +19,7 @@ def analyze_video(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin)
 ):
-    # Check single-job queue if running embedded
-    if AI_WORKER_MODE == "embedded":
-        from app.services.detector import is_processing_active
-        if is_processing_active:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="The AI processing engine is currently busy analyzing another video. Please wait until it completes."
-            )
-
-    # Save to temp file and validate size
-    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
-    temp_path = UPLOAD_DIR / unique_filename
-
     max_bytes = MAX_VIDEO_MB * 1024 * 1024
-
-    try:
-        total_bytes = 0
-        with open(temp_path, "wb") as buffer:
-            while chunk := file.file.read(1024 * 1024): # 1MB chunks
-                total_bytes += len(chunk)
-                if total_bytes > max_bytes:
-                    buffer.close()
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Video file exceeds the {MAX_VIDEO_MB} MB limit. Please upload a shorter or compressed clip."
-                    )
-                buffer.write(chunk)
-    except HTTPException:
-        raise
-    except Exception as e:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        raise HTTPException(status_code=500, detail=f"Failed to receive video file: {str(e)}")
 
     # Create job in database
     job = VideoJob(
@@ -65,13 +31,38 @@ def analyze_video(
     db.commit()
     db.refresh(job)
 
-    # Spawn background processing if embedded mode
-    if AI_WORKER_MODE == "embedded":
-        from app.services.detector import start_video_processing_thread
-        start_video_processing_thread(job.id, str(temp_path), SessionLocal)
-        msg = "Video uploaded successfully. AI processing started."
-    else:
-        msg = "Video uploaded successfully. AI analysis queued for worker."
+    # Save to file with job-specific prefix for reliable worker pickup
+    unique_filename = f"job_{job.id}_{uuid.uuid4().hex[:6]}_{file.filename}"
+    temp_path = UPLOAD_DIR / unique_filename
+
+    try:
+        total_bytes = 0
+        with open(temp_path, "wb") as buffer:
+            while chunk := file.file.read(1024 * 1024): # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    buffer.close()
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+                    job.status = "failed"
+                    job.error = f"Video file exceeds {MAX_VIDEO_MB} MB limit."
+                    db.commit()
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Video file exceeds the {MAX_VIDEO_MB} MB limit. Please upload a shorter or compressed clip."
+                    )
+                buffer.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        job.status = "failed"
+        job.error = str(e)
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Failed to receive video file: {str(e)}")
+
+    msg = "Video uploaded successfully. AI processing queued for worker."
 
     return VideoAnalyzeResponse(
         job_id=job.id,

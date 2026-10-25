@@ -778,8 +778,12 @@ def process_video_job(job_id: int, video_path: str, db_factory):
                 current_pct = int(min(90, 5 + (frame_idx / max(1, total_frames)) * 85))
                 job.progress = current_pct
                 job.vehicles_detected = len(detected_vehicle_keys)
-                job.violations_found = violations_count
                 db.commit()
+                try:
+                    from app.routes.worker import record_heartbeat
+                    record_heartbeat()
+                except Exception:
+                    pass
 
         cap.release()
 
